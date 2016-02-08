@@ -4,6 +4,7 @@ import consul
 import sys
 from urlparse import urlparse
 
+
 consul_host = "{{ .Env.CONSUL_HOST }}"
 if not consul_host:
     print "CONSUL_HOST not set"
@@ -32,17 +33,25 @@ if data==None :
 {{ $addrLen := len $value.Addresses }}
   {{ if eq $addrLen 2 }}
     {{ with $address := index $value.Addresses 1 }}
+    {{ with $address2 := index $value.Addresses 0 }}
       {{ if $local.Env.CONTAINER_LABELNAME }}
         {{range $key2, $value2 := $value.Labels}}
           {{ if eq $key2 $local.Env.CONTAINER_LABELNAME }}
             {{ if eq $value2 $local.Env.CONTAINER_LABELVALUE }}
-
 index,data=client.kv.get(consul_dir+"/{{ $value.Image.Repository}}/{{printf "%.*s" 12 $value.ID}}")
+              {{ if eq "127.0.0.1" $address2.HostIP }}
+publicip='{{ $address.HostIP }}'
+              {{ else }}
+publicip='{{ $address2.HostIP }}'
+              {{ end }}
 if data==None :
 	session_id=client.session.create(ttl=int(ttl),behavior='delete')
-	client.kv.put(consul_dir+"/{{ $value.Image.Repository}}/{{printf "%.*s" 12 $value.ID}}", "{{ $address.HostIP }}",acquire=session_id)
+	client.kv.put(consul_dir+"/{{ $value.Image.Repository}}/{{printf "%.*s" 12 $value.ID}}", publicip ,acquire=session_id)
 else :
-	client.session.renew(data['Session'])
+	if data['Value'] != publicip :
+		client.kv.put(consul_dir+"/{{ $value.Image.Repository}}/{{printf "%.*s" 12 $value.ID}}", publicip ,acquire=data['Session'])
+	else :
+		client.session.renew(data['Session'])
             {{ end }}
           {{ end }}
         {{ end }}
@@ -50,10 +59,14 @@ else :
 index,data=client.kv.get(consul_dir+"/{{ $value.Image.Repository}}/{{printf "%.*s" 12 $value.ID}}")
 if data==None :
   session_id=client.session.create(ttl=int(ttl),behavior='delete')
-  client.kv.put(consul_dir+"/{{ $value.Image.Repository}}/{{printf "%.*s" 12 $value.ID}}", "{{ $address.HostIP }}",acquire=session_id)
+  client.kv.put(consul_dir+"/{{ $value.Image.Repository}}/{{printf "%.*s" 12 $value.ID}}", publicip ,acquire=session_id)
 else :
-  client.session.renew(data['Session'])
+  if data['Value'] != publicip :
+    client.kv.put(consul_dir+"/{{ $value.Image.Repository}}/{{printf "%.*s" 12 $value.ID}}", publicip ,acquire=data['Session'])
+  else :
+    client.session.renew(data['Session'])
       {{ end }}
     {{ end }}
+  {{ end }}
   {{ end }}
 {{ end }}
